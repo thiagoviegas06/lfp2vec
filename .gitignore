@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# server-side data csvs (large, fetched via scripts)
+/data/
+/channels.csv
+
+# scripts and raw data (re-generate with scripts/)
+/scripts/
+session_data
+*.nwb
+
+# other local directories
+/website_lfp2vec/

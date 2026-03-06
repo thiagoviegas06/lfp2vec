@@ -36,6 +36,16 @@ type IblPidIndexResponse = {
   pidsBySession?: Record<string, string[]>;
 };
 
+type AllenIndexResponse = {
+  sessions: string[];
+  pidsBySession: Record<string, string[]>;
+  tracks: Record<string, {
+    acronyms: string[];
+    uniqueAcronyms: string[];
+    downsampled: IblTrackPoint[];
+  }>;
+};
+
 type ProbeVisuals = {
   pid: string;
   waveform: number[][];
@@ -795,32 +805,33 @@ export default function Lfp2VecDemo() {
     };
   }, [dataset]);
 
-  // For Allen: load pid list from server-side cached CSV index.
+  // Allen index: cached static JSON with sessions, pids, and track data.
+  const [allenIndex, setAllenIndex] = useState<AllenIndexResponse | null>(null);
+
   useEffect(() => {
     let cancelled = false;
 
-    async function loadAllenPids() {
+    async function loadAllenIndex() {
       if (dataset !== "Allen") return;
       setLoaded(false);
 
       try {
-        const res = await fetch("/api/allen/pids");
-        if (!res.ok) throw new Error(`Failed to fetch Allen pids (${res.status})`);
+        const res = await fetch("/data/allen/index.json");
+        if (!res.ok) throw new Error(`Failed to fetch Allen index (${res.status})`);
 
-        const data = (await res.json()) as IblPidIndexResponse;
-        const pids = Array.isArray(data.pids) ? data.pids : [];
-        const sessions = Array.isArray(data.sessions) ? data.sessions : [];
-        const bySession = data.pidsBySession ?? {};
+        const data = (await res.json()) as AllenIndexResponse;
 
         if (!cancelled) {
-          setAllenSessionOptions(sessions);
-          setAllenPidsBySession(bySession);
-          setSession((prev) => (sessions.includes(prev) ? prev : (sessions[0] ?? "")));
-          if (pids.length === 0 || sessions.length === 0) setLoaded(true);
+          setAllenIndex(data);
+          setAllenSessionOptions(data.sessions);
+          setAllenPidsBySession(data.pidsBySession);
+          setSession((prev) => (data.sessions.includes(prev) ? prev : (data.sessions[0] ?? "")));
+          if (data.sessions.length === 0) setLoaded(true);
         }
       } catch (error) {
-        console.error("Failed to load Allen pids", error);
+        console.error("Failed to load Allen index", error);
         if (!cancelled) {
+          setAllenIndex(null);
           setAllenSessionOptions([]);
           setAllenPidsBySession({});
           setAllenPidOptions([]);
@@ -831,7 +842,7 @@ export default function Lfp2VecDemo() {
       }
     }
 
-    loadAllenPids().catch((e) => console.error(e));
+    loadAllenIndex().catch((e) => console.error(e));
 
     return () => {
       cancelled = true;
@@ -927,58 +938,34 @@ export default function Lfp2VecDemo() {
     };
   }, [dataset, session, probe, nChannels, iblPidOptions, iblSessionOptions]);
 
-  // Allen region probabilities come from server-side downsampled track acronyms.
+  // Allen region probabilities come from the cached static index.
   useEffect(() => {
-    let cancelled = false;
+    if (dataset !== "Allen") return;
+    if (!allenIndex) return;
+    if (!probe) return;
 
-    async function loadAllenTrack() {
-      if (dataset !== "Allen") return;
-      if (!allenSessionOptions.includes(session)) return;
-      if (allenPidOptions.length === 0) return;
-      if (!allenPidOptions.includes(probe)) return;
-      if (!session) return;
-      if (!probe) return;
-
-      setLoaded(false);
-
-      try {
-        const res = await fetch(
-          `/api/allen/track?eid=${encodeURIComponent(session)}&pid=${encodeURIComponent(probe)}&n=${nChannels}`
-        );
-        if (!res.ok) throw new Error(`Failed to fetch Allen track (${res.status})`);
-
-        const data = (await res.json()) as IblTrackResponse;
-        const regions = data.uniqueAcronyms.length ? data.uniqueAcronyms : [...REGIONS_BY_DATASET.Allen];
-        const probs = oneHotRegionProbs(data.acronyms, regions);
-
-        if (!cancelled) {
-          setAllenRegions(regions);
-          setRegionProbs(probs);
-          setAllenDownsampled(Array.isArray(data.downsampled) ? data.downsampled : []);
-          setLoaded(true);
-        }
-      } catch (error) {
-        console.error("Failed to load Allen track", error);
-        if (!cancelled) {
-          const fallbackRegions = [...REGIONS_BY_DATASET.Allen];
-          setAllenRegions(fallbackRegions);
-          setRegionProbs(
-            Array.from({ length: nChannels }, () =>
-              Array(fallbackRegions.length).fill(1 / fallbackRegions.length)
-            )
-          );
-          setAllenDownsampled([]);
-          setLoaded(true);
-        }
-      }
+    const trackData = allenIndex.tracks[probe];
+    if (!trackData) {
+      const fallbackRegions = [...REGIONS_BY_DATASET.Allen];
+      setAllenRegions(fallbackRegions);
+      setRegionProbs(
+        Array.from({ length: nChannels }, () =>
+          Array(fallbackRegions.length).fill(1 / fallbackRegions.length)
+        )
+      );
+      setAllenDownsampled([]);
+      setLoaded(true);
+      return;
     }
 
-    loadAllenTrack().catch((e) => console.error(e));
+    const regions = trackData.uniqueAcronyms.length ? trackData.uniqueAcronyms : [...REGIONS_BY_DATASET.Allen];
+    const probs = oneHotRegionProbs(trackData.acronyms, regions);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [dataset, session, probe, nChannels, allenPidOptions, allenSessionOptions]);
+    setAllenRegions(regions);
+    setRegionProbs(probs);
+    setAllenDownsampled(Array.isArray(trackData.downsampled) ? trackData.downsampled : []);
+    setLoaded(true);
+  }, [dataset, probe, nChannels, allenIndex]);
 
   // Fetch real probe visuals (waveform, heatmaps) for Allen probes.
   useEffect(() => {

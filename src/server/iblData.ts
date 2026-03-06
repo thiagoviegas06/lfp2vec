@@ -124,8 +124,11 @@ export async function ensureLoaded(): Promise<void> {
     let text: string;
     try {
       text = await fs.readFile(CSV_PATH, "utf8");
-    } catch (error) {
-      throw new Error(`IBL CSV not found at ${CSV_PATH}: ${(error as Error).message}`);
+    } catch {
+      // CSV not available (e.g. not deployed); mark as loaded with empty data.
+      console.warn(`IBL CSV not found at ${CSV_PATH}, serving empty data.`);
+      loaded = true;
+      return;
     }
 
     parseCsv(text);
