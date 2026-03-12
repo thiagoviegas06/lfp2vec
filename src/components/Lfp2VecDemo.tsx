@@ -1193,9 +1193,9 @@ export default function Lfp2VecDemo() {
 
       {dataset === "Allen" && (
         <>
-          {/* Compact Layout: Ground Truth and Predictions Side-by-Side */}
+          {/* Neurophysiological Signals Section */}
           <div className="content">
-            <h3 className="title is-5">Ground Truth & Predictions</h3>
+            <h3 className="title is-5">Neurophysiological Signals</h3>
           </div>
 
           {/* Raw LFP Signal (Full Width) */}
@@ -1261,6 +1261,11 @@ export default function Lfp2VecDemo() {
                 />
               )}
             </div>
+          </div>
+
+          {/* Region Predictions Section */}
+          <div className="content">
+            <h3 className="title is-5">Region Predictions</h3>
           </div>
 
           {/* Depth Profile & Prediction Heatmap (Side-by-Side) */}
