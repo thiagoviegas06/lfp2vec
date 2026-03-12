@@ -118,15 +118,15 @@ def interpolate_bad_channels(raw, bad_channels):
     return raw
 
 
-def load_nwb_data(session_id, probe_id, time_range=None):
+def load_nwb_data(nwb_path_or_session_id, probe_id=None, time_range=None):
     """Load LFP data from Allen NWB file.
 
     Parameters
     ----------
-    session_id : str or int
-        Session ID
-    probe_id : str or int
-        Probe ID
+    nwb_path_or_session_id : str or Path
+        Either: direct path to NWB file, OR session ID (if probe_id provided)
+    probe_id : str or int, optional
+        Probe ID (only used if nwb_path_or_session_id is a session ID)
     time_range : tuple, optional
         (start_time, end_time) in seconds. If None, loads entire recording.
 
@@ -139,8 +139,21 @@ def load_nwb_data(session_id, probe_id, time_range=None):
     timestamps : np.ndarray
         Timestamps for the data
     """
-    SESSION_DATA_DIR = Path(__file__).parent / "session_data" / "sessions"
-    nwb_path = SESSION_DATA_DIR / f"session_{session_id}" / f"probe_{probe_id}_lfp.nwb"
+    # Handle both direct path and session_id/probe_id inputs
+    if probe_id is not None:
+        # Use session_id and probe_id format
+        SESSION_DATA_DIR = Path(__file__).parent / "session_data" / "sessions"
+        nwb_path = SESSION_DATA_DIR / f"session_{nwb_path_or_session_id}" / f"probe_{probe_id}_lfp.nwb"
+    else:
+        # Use direct path and extract probe_id from filename
+        nwb_path = Path(nwb_path_or_session_id)
+        # Extract probe_id from filename (probe_XXXXX_lfp.nwb)
+        filename = nwb_path.stem  # e.g., "probe_773549848_lfp"
+        parts = filename.split('_')
+        if len(parts) >= 2 and parts[0] == 'probe':
+            probe_id = parts[1]
+        else:
+            raise ValueError(f"Cannot extract probe_id from filename: {nwb_path.name}")
 
     if not nwb_path.exists():
         raise FileNotFoundError(f"NWB file not found: {nwb_path}")
@@ -204,16 +217,16 @@ def destripe_data(data, fs, method='bp_pshift_cmr'):
     return rec_preprocessed.get_traces()
 
 
-def process_allen_lfp(session_id, probe_id, time_range=None, destripe_method='bp_pshift_cmr',
+def process_allen_lfp(nwb_path_or_session_id, probe_id=None, time_range=None, destripe_method='bp_pshift_cmr',
                       detect_bad=True, interpolate_bad=True, verbose=True):
     """Complete pipeline: load → destripe → detect bad channels → interpolate → preprocess.
 
     Parameters
     ----------
-    session_id : str or int
-        Session ID
-    probe_id : str or int
-        Probe ID
+    nwb_path_or_session_id : str or Path
+        Either: direct path to NWB file, OR session ID (if probe_id provided)
+    probe_id : str or int, optional
+        Probe ID (only used if nwb_path_or_session_id is a session ID)
     time_range : tuple, optional
         (start_time, end_time) in seconds
     destripe_method : str
@@ -234,15 +247,21 @@ def process_allen_lfp(session_id, probe_id, time_range=None, destripe_method='bp
     labels : dict
         Bad channel labels {'dead': array, 'noisy': array}
     """
+    # Get display name
+    if probe_id is not None:
+        display_name = f"probe {probe_id} from session {nwb_path_or_session_id}"
+    else:
+        display_name = str(nwb_path_or_session_id)
+
     if verbose:
         print(f"\n{'='*70}")
-        print(f"Processing probe {probe_id} from session {session_id}")
+        print(f"Processing {display_name}")
         print(f"{'='*70}")
 
     # Load NWB data
     if verbose:
         print(f"\n[1/5] Loading NWB data...")
-    data, fs, _ = load_nwb_data(session_id, probe_id, time_range)
+    data, fs, _ = load_nwb_data(nwb_path_or_session_id, probe_id, time_range)
     if verbose:
         print(f"  Loaded: {data.shape[0]} channels × {data.shape[1]} samples")
         print(f"  Sampling rate: {fs} Hz")
@@ -342,9 +361,25 @@ def plot_processed_heatmap(processed_data, output_path, v_limit=None, fs=1250):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Process Allen LFP data with bad channel detection.")
-    parser.add_argument("session_id", type=str, help="Session ID (e.g. 768515987)")
-    parser.add_argument("probe_id", type=str, help="Probe ID (e.g. 773549848)")
+    parser = argparse.ArgumentParser(
+        description="Process Allen LFP data with bad channel detection.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Using session ID and probe ID
+  python amplitude_map.py 768515987 773549848 --save-heatmap
+
+  # Using direct NWB file path
+  python amplitude_map.py /path/to/probe_773549848_lfp.nwb --save-heatmap
+
+  # Process 5 seconds only
+  python amplitude_map.py 768515987 773549848 --time-range 0 5
+        """)
+
+    parser.add_argument("input", type=str,
+                        help="Session ID (e.g. 768515987) or path to NWB file")
+    parser.add_argument("probe_id", nargs='?', type=str,
+                        help="Probe ID (e.g. 773549848) - omit if using NWB file path")
     parser.add_argument("--time-range", nargs=2, type=float, help="Time range (start_s end_s)")
     parser.add_argument("--destripe", choices=["bp_pshift_cmr", "simple"], default="bp_pshift_cmr",
                         help="Destriping method (default: bp_pshift_cmr)")
@@ -356,8 +391,18 @@ if __name__ == "__main__":
 
     time_range = tuple(args.time_range) if args.time_range else None
 
+    # Determine if input is a path or session ID
+    if args.input.endswith('.nwb') or args.input.endswith('nwb/'):
+        # Direct path to NWB file
+        nwb_path = args.input
+        heatmap_name = Path(nwb_path).stem
+    else:
+        # Session ID + Probe ID format
+        nwb_path = args.input
+        heatmap_name = f"{args.input}_{args.probe_id}"
+
     processed, bad_ch, labels = process_allen_lfp(
-        args.session_id, args.probe_id,
+        nwb_path, args.probe_id,
         time_range=time_range,
         destripe_method=args.destripe,
         detect_bad=not args.no_detect_bad,
@@ -369,6 +414,6 @@ if __name__ == "__main__":
 
     if args.save_heatmap:
         heatmap_dir = Path(__file__).parent / "public" / "amplitude_heatmaps"
-        heatmap_path = heatmap_dir / f"{args.session_id}_{args.probe_id}_processed.png"
+        heatmap_path = heatmap_dir / f"{heatmap_name}_processed.png"
         plot_processed_heatmap(processed, heatmap_path, fs=1250)
         print(f"\nHeatmap saved to: {heatmap_path}")
