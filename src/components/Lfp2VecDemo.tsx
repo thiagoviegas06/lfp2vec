@@ -700,6 +700,25 @@ function HeatmapImageCard({
   );
 }
 
+/** Brain regions and their colors (from depth profile legend) */
+const REGION_LEGEND = [
+  { name: "DG-mo", color: "#CCFF00" },
+  { name: "Eth", color: "#FF99CC" },
+  { name: "APN", color: "#FF00FF" },
+  { name: "DG-sg", color: "#336633" },
+  { name: "VISl1", color: "#003366" },
+  { name: "ViSam6a", color: "#003366" },
+  { name: "MGv", color: "#FF9999" },
+  { name: "ViSrl4", color: "#003366" },
+  { name: "ViSam5", color: "#0066CC" },
+  { name: "ViS/2/3", color: "#0099FF" },
+  { name: "ViSrl5a", color: "#00CCFF" },
+  { name: "ViSrl5", color: "#00CCFF" },
+  { name: "SSp-bfd5", color: "#339900" },
+  { name: "LGd-ip", color: "#FF6666" },
+  { name: "SUB", color: "#99FF99" },
+];
+
 /** Depth Profile Card with Region Legend */
 function DepthProfileCard({
   title,
@@ -710,24 +729,6 @@ function DepthProfileCard({
   subtitle?: string;
   imageSrc: string;
 }) {
-  // Brain regions and their colors (from depth profile legend)
-  const regionLegend = [
-    { name: "DG-mo", color: "#CCFF00" },
-    { name: "Eth", color: "#FF99CC" },
-    { name: "APN", color: "#FF00FF" },
-    { name: "DG-sg", color: "#336633" },
-    { name: "VISl1", color: "#003366" },
-    { name: "ViSam6a", color: "#003366" },
-    { name: "MGv", color: "#FF9999" },
-    { name: "ViSrl4", color: "#003366" },
-    { name: "ViSam5", color: "#0066CC" },
-    { name: "ViS/2/3", color: "#0099FF" },
-    { name: "ViSrl5a", color: "#00CCFF" },
-    { name: "ViSrl5", color: "#00CCFF" },
-    { name: "SSp-bfd5", color: "#339900" },
-    { name: "LGd-ip", color: "#FF6666" },
-    { name: "SUB", color: "#99FF99" },
-  ];
 
   return (
     <div className="card">
@@ -740,32 +741,8 @@ function DepthProfileCard({
       <div className="card-content" style={{ padding: "0.75rem" }}>
         <div className="content" style={{ marginBottom: 0 }}>
           {/* Image */}
-          <div style={{ marginBottom: 8 }}>
+          <div style={{ marginBottom: 0 }}>
             <img src={imageSrc} alt={title} style={{ width: "100%", display: "block" }} />
-          </div>
-          {/* Region Legend - compact */}
-          <div style={{ fontSize: "0.7rem" }}>
-            <p className="has-text-weight-semibold has-text-grey" style={{ marginBottom: 4 }}>
-              Predicted Regions:
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
-              {regionLegend.map((region) => (
-                <div key={region.name} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                  <div
-                    style={{
-                      width: 10,
-                      height: 10,
-                      backgroundColor: region.color,
-                      borderRadius: 1,
-                      flexShrink: 0,
-                    }}
-                  />
-                  <span className="has-text-grey" style={{ whiteSpace: "nowrap", fontSize: "0.65rem" }}>
-                    {region.name}
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </div>
@@ -1267,13 +1244,15 @@ export default function Lfp2VecDemo() {
 
           {/* Depth Profile & Prediction Heatmap (Side-by-Side) */}
           <div className="columns is-multiline">
-            <div className="column is-6">
+            <div className="column is-4" style={{ display: "flex", flexDirection: "column" }}>
               {session && probe ? (
-                <DepthProfileCard
-                  title="Depth Profile"
-                  subtitle="Predicted region distribution per channel"
-                  imageSrc={`/predictions/depth_profile_${probe}.png`}
-                />
+                <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                  <DepthProfileCard
+                    title="Depth Profile"
+                    subtitle="Predicted region distribution per channel"
+                    imageSrc={`/predictions_2/depth_profile_probe${probe}.png`}
+                  />
+                </div>
               ) : (
                 <Panel title="Predicted Labels" subtitle="argmax region per channel">
                   <RegionLabelStrip probs={regionProbs} height={160} />
@@ -1281,24 +1260,89 @@ export default function Lfp2VecDemo() {
               )}
             </div>
 
-            <div className="column is-6">
-              <div className="card">
+            <div className="column is-8" style={{ display: "flex", flexDirection: "column" }}>
+              <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                 <header className="card-header">
                   <p className="card-header-title is-size-7">
                     Prediction Heatmap
                     <span className="ml-2 has-text-grey">— Per-channel region probabilities</span>
                   </p>
                 </header>
-                <div className="card-content" style={{ padding: "0.75rem" }}>
-                  <div className="content" style={{ overflow: "hidden" }}>
-                    <img
-                      src="/predictions/prediction_heatmap.png"
-                      alt="Prediction Heatmap"
-                      style={{ width: "100%", display: "block", maxHeight: "1200px", objectFit: "cover" }}
-                    />
+                <div className="card-content" style={{ padding: "0.75rem 0.75rem 0.75rem 0.75rem", flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", marginTop: "-0rem" }}>
+                  <div className="content" style={{ overflow: "hidden", flex: 1, display: "flex", alignItems: "flex-start", justifyContent: "center", margin: 0 }}>
+                    {session && probe ? (
+                      <img
+                        src={`/predictions_2/prediction_heatmap_probe${probe}.png`}
+                        alt="Prediction Heatmap"
+                        style={{ width: "100%", height: "100%", display: "block", objectFit: "contain" }}
+                      />
+                    ) : (
+                      <span className="has-text-grey">No prediction data available</span>
+                    )}
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Predicted Regions Legend (Full Width) */}
+          <div className="columns is-multiline">
+            <div className="column is-12">
+              <div className="box" style={{ padding: "0.75rem", marginBottom: 0 }}>
+                <p className="has-text-weight-semibold has-text-grey is-size-7" style={{ marginBottom: 8, fontWeight: "bold" }}>
+                  Predicted Regions:
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 3, fontSize: "0.7rem" }}>
+                  {REGION_LEGEND.map((region) => (
+                    <div key={region.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div
+                        style={{
+                          width: 12,
+                          height: 12,
+                          backgroundColor: region.color,
+                          borderRadius: 2,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span className="has-text-grey">{region.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {dataset === "Allen" && (
+        <>
+          {/* Embeddings Section */}
+          <div className="content">
+            <h3 className="title is-5">Embeddings</h3>
+            <p className="has-text-grey is-size-7">Full supervised model predictions</p>
+          </div>
+
+          <div className="columns is-multiline">
+            <div className="column is-12">
+              {session && probe ? (
+                <div className="card">
+                  <header className="card-header">
+                    <p className="card-header-title is-size-7">
+                      LFP2Vec Embeddings
+                      <span className="ml-2 has-text-grey">— PCA/UMAP projection colored by ground truth regions</span>
+                    </p>
+                  </header>
+                  <div className="card-content" style={{ padding: "0.75rem" }}>
+                    <div className="content" style={{ overflow: "hidden" }}>
+                      <img
+                        src={`/embeddings/embeddings_${probe}.png`}
+                        alt="Embeddings"
+                        style={{ width: "100%", display: "block", maxHeight: "600px", objectFit: "contain" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </>
