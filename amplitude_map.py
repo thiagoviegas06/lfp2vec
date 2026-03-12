@@ -372,48 +372,135 @@ Examples:
   # Using direct NWB file path
   python amplitude_map.py /path/to/probe_773549848_lfp.nwb --save-heatmap
 
+  # Process all probes in a folder
+  python amplitude_map.py /path/to/session_folder/ --save-heatmap
+
+  # Dry run (preview what would be processed)
+  python amplitude_map.py /path/to/session_folder/ --dry-run
+
   # Process 5 seconds only
   python amplitude_map.py 768515987 773549848 --time-range 0 5
         """)
 
     parser.add_argument("input", type=str,
-                        help="Session ID (e.g. 768515987) or path to NWB file")
+                        help="Session ID, NWB file path, or folder with NWB files")
     parser.add_argument("probe_id", nargs='?', type=str,
-                        help="Probe ID (e.g. 773549848) - omit if using NWB file path")
+                        help="Probe ID - omit if using NWB file/folder path")
     parser.add_argument("--time-range", nargs=2, type=float, help="Time range (start_s end_s)")
     parser.add_argument("--destripe", choices=["bp_pshift_cmr", "simple"], default="bp_pshift_cmr",
                         help="Destriping method (default: bp_pshift_cmr)")
     parser.add_argument("--no-detect-bad", action="store_true", help="Skip bad channel detection")
     parser.add_argument("--no-interpolate", action="store_true", help="Skip bad channel interpolation")
     parser.add_argument("--save-heatmap", action="store_true", help="Save heatmap visualization of processed data")
+    parser.add_argument("--dry-run", action="store_true", help="Preview probes to process without running")
 
     args = parser.parse_args()
 
     time_range = tuple(args.time_range) if args.time_range else None
+    input_path = Path(args.input)
 
-    # Determine if input is a path or session ID
-    if args.input.endswith('.nwb') or args.input.endswith('nwb/'):
-        # Direct path to NWB file
-        nwb_path = args.input
-        heatmap_name = Path(nwb_path).stem
+    # Determine input type
+    if input_path.is_dir():
+        # Folder: find all probe_*_lfp.nwb files
+        nwb_files = sorted(input_path.glob("probe_*_lfp.nwb"))
+
+        if not nwb_files:
+            print(f"Error: No probe_*_lfp.nwb files found in {input_path}")
+            exit(1)
+
+        print(f"\nFound {len(nwb_files)} probe(s) in {input_path}")
+
+        if args.dry_run:
+            print("\n📋 Dry run - probes to process:")
+            for i, nwb in enumerate(nwb_files, 1):
+                print(f"  {i}. {nwb.name}")
+            exit(0)
+
+        # Process all probes
+        results = []
+        print(f"\n{'='*70}")
+        print(f"Processing {len(nwb_files)} probes")
+        print(f"{'='*70}")
+
+        for i, nwb_path in enumerate(nwb_files, 1):
+            print(f"\n[{i}/{len(nwb_files)}] Processing {nwb_path.name}...")
+            try:
+                processed, bad_ch, labels = process_allen_lfp(
+                    str(nwb_path), None,
+                    time_range=time_range,
+                    destripe_method=args.destripe,
+                    detect_bad=not args.no_detect_bad,
+                    interpolate_bad=not args.no_interpolate,
+                    verbose=False
+                )
+
+                print(f"  ✓ Output shape: {processed.shape}")
+                print(f"  Bad channels: {len(bad_ch)}")
+
+                if args.save_heatmap:
+                    heatmap_dir = Path(__file__).parent / "public" / "amplitude_heatmaps"
+                    heatmap_name = nwb_path.stem
+                    heatmap_path = heatmap_dir / f"{heatmap_name}_processed.png"
+                    plot_processed_heatmap(processed, heatmap_path, fs=1250)
+
+                results.append({'probe': nwb_path.name, 'status': 'success', 'shape': processed.shape, 'bad_ch': len(bad_ch)})
+
+            except Exception as e:
+                print(f"  ❌ Error: {e}")
+                results.append({'probe': nwb_path.name, 'status': 'failed', 'error': str(e)})
+
+        # Summary
+        print(f"\n{'='*70}")
+        print("SUMMARY")
+        print(f"{'='*70}")
+        success_count = sum(1 for r in results if r['status'] == 'success')
+        print(f"✓ Processed: {success_count}/{len(results)}")
+
+        for r in results:
+            if r['status'] == 'success':
+                print(f"  {r['probe']}: {r['shape']} ({r['bad_ch']} bad channels)")
+            else:
+                print(f"  {r['probe']}: FAILED - {r['error']}")
+
+    elif args.input.endswith('.nwb') or input_path.is_file():
+        # Single NWB file
+        processed, bad_ch, labels = process_allen_lfp(
+            args.input, args.probe_id,
+            time_range=time_range,
+            destripe_method=args.destripe,
+            detect_bad=not args.no_detect_bad,
+            interpolate_bad=not args.no_interpolate,
+            verbose=True
+        )
+
+        print(f"Output shape: {processed.shape} (channels × samples)")
+
+        if args.save_heatmap:
+            heatmap_dir = Path(__file__).parent / "public" / "amplitude_heatmaps"
+            heatmap_name = Path(args.input).stem
+            heatmap_path = heatmap_dir / f"{heatmap_name}_processed.png"
+            plot_processed_heatmap(processed, heatmap_path, fs=1250)
+            print(f"\nHeatmap saved to: {heatmap_path}")
+
     else:
         # Session ID + Probe ID format
-        nwb_path = args.input
-        heatmap_name = f"{args.input}_{args.probe_id}"
+        if args.probe_id is None:
+            print("Error: probe_id required when using session ID")
+            exit(1)
 
-    processed, bad_ch, labels = process_allen_lfp(
-        nwb_path, args.probe_id,
-        time_range=time_range,
-        destripe_method=args.destripe,
-        detect_bad=not args.no_detect_bad,
-        interpolate_bad=not args.no_interpolate,
-        verbose=True
-    )
+        processed, bad_ch, labels = process_allen_lfp(
+            args.input, args.probe_id,
+            time_range=time_range,
+            destripe_method=args.destripe,
+            detect_bad=not args.no_detect_bad,
+            interpolate_bad=not args.no_interpolate,
+            verbose=True
+        )
 
-    print(f"Output shape: {processed.shape} (channels × samples)")
+        print(f"Output shape: {processed.shape} (channels × samples)")
 
-    if args.save_heatmap:
-        heatmap_dir = Path(__file__).parent / "public" / "amplitude_heatmaps"
-        heatmap_path = heatmap_dir / f"{heatmap_name}_processed.png"
-        plot_processed_heatmap(processed, heatmap_path, fs=1250)
-        print(f"\nHeatmap saved to: {heatmap_path}")
+        if args.save_heatmap:
+            heatmap_dir = Path(__file__).parent / "public" / "amplitude_heatmaps"
+            heatmap_path = heatmap_dir / f"{args.input}_{args.probe_id}_processed.png"
+            plot_processed_heatmap(processed, heatmap_path, fs=1250)
+            print(f"\nHeatmap saved to: {heatmap_path}")
