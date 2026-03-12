@@ -116,21 +116,6 @@ const REGIONS_BY_DATASET: Record<DatasetKey, readonly string[]> = {
   Neuronexus: BRAIN_REGIONS,
 };
 
-const REGION_COLORS = [
-  "#E74C3C",
-  "#3498DB",
-  "#2ECC71",
-  "#F39C12",
-  "#9B59B6",
-  "#1ABC9C",
-  "#E67E22",
-  "#34495E",
-  "#16A085",
-  "#C0392B",
-  "#2980B9",
-  "#8E44AD",
-] as const;
-
 const DATASETS: Datasets = {
   Allen: {
     sessions: [],
@@ -432,96 +417,6 @@ function ColorbarLegend({
   );
 }
 
-function RegionProbChart({ probs, height }: { probs: RegionProbs; height: number }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { ref: wrapRef, size } = useElementSize<HTMLDivElement>();
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || probs.length === 0) return;
-
-    const width = Math.max(1, Math.floor(size.width));
-    if (width <= 1) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(width * dpr);
-    canvas.height = Math.floor(height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-
-    const nCh = probs.length;
-    const nR = probs[0]?.length ?? 0;
-    if (nR === 0) return;
-
-    const barH = height / nCh;
-    for (let ch = 0; ch < nCh; ch++) {
-      let xOff = 0;
-      for (let r = 0; r < nR; r++) {
-        const w = probs[ch][r] * width;
-        ctx.fillStyle = REGION_COLORS[r % REGION_COLORS.length];
-        ctx.globalAlpha = 0.9;
-        ctx.fillRect(xOff, ch * barH, w, barH);
-        xOff += w;
-      }
-    }
-    ctx.globalAlpha = 1;
-  }, [probs, height, size.width]);
-
-  return (
-    <div ref={wrapRef}>
-      <canvas ref={canvasRef} style={{ width: "100%", height }} />
-    </div>
-  );
-}
-
-function RegionLabelStrip({ probs, height }: { probs: RegionProbs; height: number }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { ref: wrapRef, size } = useElementSize<HTMLDivElement>();
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || probs.length === 0) return;
-
-    const width = Math.max(1, Math.floor(size.width));
-    if (width <= 1) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(width * dpr);
-    canvas.height = Math.floor(height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-
-    const nCh = probs.length;
-    const barH = height / nCh;
-
-    for (let ch = 0; ch < nCh; ch++) {
-      const row = probs[ch];
-      let maxIdx = 0;
-      let maxVal = -Infinity;
-      for (let i = 0; i < row.length; i++) {
-        if (row[i] > maxVal) {
-          maxVal = row[i];
-          maxIdx = i;
-        }
-      }
-      ctx.fillStyle = REGION_COLORS[maxIdx % REGION_COLORS.length];
-      ctx.fillRect(0, ch * barH, width, barH);
-    }
-  }, [probs, height, size.width]);
-
-  return (
-    <div ref={wrapRef}>
-      <canvas ref={canvasRef} style={{ width: "100%", height }} />
-    </div>
-  );
-}
-
 /** ---------- UI Primitives (Bulma-styled, no inline styles) ---------- */
 function Dropdown({ label, value, options, onChange }: DropdownProps) {
   return (
@@ -693,56 +588,6 @@ function HeatmapImageCard({
               />
               <span className="is-size-7 has-text-grey">High</span>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Brain regions and their colors (from depth profile legend) */
-const REGION_LEGEND = [
-  { name: "DG-mo", color: "#CCFF00" },
-  { name: "Eth", color: "#FF99CC" },
-  { name: "APN", color: "#FF00FF" },
-  { name: "DG-sg", color: "#336633" },
-  { name: "VISl1", color: "#003366" },
-  { name: "ViSam6a", color: "#003366" },
-  { name: "MGv", color: "#FF9999" },
-  { name: "ViSrl4", color: "#003366" },
-  { name: "ViSam5", color: "#0066CC" },
-  { name: "ViS/2/3", color: "#0099FF" },
-  { name: "ViSrl5a", color: "#00CCFF" },
-  { name: "ViSrl5", color: "#00CCFF" },
-  { name: "SSp-bfd5", color: "#339900" },
-  { name: "LGd-ip", color: "#FF6666" },
-  { name: "SUB", color: "#99FF99" },
-];
-
-/** Depth Profile Card with Region Legend */
-function DepthProfileCard({
-  title,
-  subtitle,
-  imageSrc,
-}: {
-  title: string;
-  subtitle?: string;
-  imageSrc: string;
-}) {
-
-  return (
-    <div className="card">
-      <header className="card-header">
-        <p className="card-header-title is-size-7">
-          {title}
-          {subtitle ? <span className="ml-2 has-text-grey">— {subtitle}</span> : null}
-        </p>
-      </header>
-      <div className="card-content" style={{ padding: "0.75rem" }}>
-        <div className="content" style={{ marginBottom: 0 }}>
-          {/* Image */}
-          <div style={{ marginBottom: 0 }}>
-            <img src={imageSrc} alt={title} style={{ width: "100%", display: "block" }} />
           </div>
         </div>
       </div>
@@ -1242,71 +1087,28 @@ export default function Lfp2VecDemo() {
             <h3 className="title is-5">Region Predictions</h3>
           </div>
 
-          {/* Depth Profile & Prediction Heatmap (Side-by-Side) */}
+          {/* Combined Prediction Heatmap */}
           <div className="columns is-multiline">
-            <div className="column is-4" style={{ display: "flex", flexDirection: "column" }}>
-              {session && probe ? (
-                <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                  <DepthProfileCard
-                    title="Depth Profile"
-                    subtitle="Predicted region distribution per channel"
-                    imageSrc={`/predictions_2/depth_profile_probe${probe}.png`}
-                  />
-                </div>
-              ) : (
-                <Panel title="Predicted Labels" subtitle="argmax region per channel">
-                  <RegionLabelStrip probs={regionProbs} height={160} />
-                </Panel>
-              )}
-            </div>
-
-            <div className="column is-8" style={{ display: "flex", flexDirection: "column" }}>
+            <div className="column is-12" style={{ display: "flex", flexDirection: "column" }}>
               <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                 <header className="card-header">
                   <p className="card-header-title is-size-7">
-                    Prediction Heatmap
-                    <span className="ml-2 has-text-grey">— Per-channel region probabilities</span>
+                    Combined Prediction
+                    <span className="ml-2 has-text-grey">— Per-channel region distribution & probabilities</span>
                   </p>
                 </header>
                 <div className="card-content" style={{ padding: "0.75rem 0.75rem 0.75rem 0.75rem", flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", marginTop: "-0rem" }}>
                   <div className="content" style={{ overflow: "hidden", flex: 1, display: "flex", alignItems: "flex-start", justifyContent: "center", margin: 0 }}>
                     {session && probe ? (
                       <img
-                        src={`/predictions_2/prediction_heatmap_probe${probe}.png`}
-                        alt="Prediction Heatmap"
+                        src={`/combined_predictions/combined_heatmap_probe${probe}.png`}
+                        alt="Combined Prediction Heatmap"
                         style={{ width: "100%", height: "100%", display: "block", objectFit: "contain" }}
                       />
                     ) : (
                       <span className="has-text-grey">No prediction data available</span>
                     )}
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Predicted Regions Legend (Full Width) */}
-          <div className="columns is-multiline">
-            <div className="column is-12">
-              <div className="box" style={{ padding: "0.75rem", marginBottom: 0 }}>
-                <p className="has-text-weight-semibold has-text-grey is-size-7" style={{ marginBottom: 8, fontWeight: "bold" }}>
-                  Predicted Regions:
-                </p>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 3, fontSize: "0.7rem" }}>
-                  {REGION_LEGEND.map((region) => (
-                    <div key={region.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div
-                        style={{
-                          width: 12,
-                          height: 12,
-                          backgroundColor: region.color,
-                          borderRadius: 2,
-                          flexShrink: 0,
-                        }}
-                      />
-                      <span className="has-text-grey">{region.name}</span>
-                    </div>
-                  ))}
                 </div>
               </div>
             </div>
