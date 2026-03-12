@@ -297,7 +297,7 @@ def process_allen_lfp(session_id, probe_id, time_range=None, destripe_method='bp
     return processed, bad_channels, labels
 
 
-def plot_processed_heatmap(processed_data, output_path, v_limit=None):
+def plot_processed_heatmap(processed_data, output_path, v_limit=None, fs=1250):
     """
     Plot processed LFP data as a heatmap and save to file.
 
@@ -310,6 +310,8 @@ def plot_processed_heatmap(processed_data, output_path, v_limit=None):
     v_limit : float, optional
         Symmetric color scale limit (vmin=-v_limit, vmax=v_limit).
         If None, uses 3x the standard deviation of the data.
+    fs : float, optional
+        Sampling rate in Hz (default: 1250 Hz for Allen data)
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -317,12 +319,22 @@ def plot_processed_heatmap(processed_data, output_path, v_limit=None):
     if v_limit is None:
         v_limit = 3 * np.std(processed_data)
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    n_channels, n_samples = processed_data.shape
+    duration_s = n_samples / fs
+
+    fig, ax = plt.subplots(figsize=(12, 7))
     ax.imshow(processed_data, aspect='auto', cmap='RdBu_r',
-              origin='lower', vmin=-v_limit, vmax=v_limit)
-    ax.axis('off')
-    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-    fig.savefig(output_path, dpi=150, bbox_inches='tight', pad_inches=0)
+              origin='lower', vmin=-v_limit, vmax=v_limit,
+              extent=[0, duration_s, 0, n_channels])
+
+    # Labels and ticks
+    ax.set_xlabel('Time (s)', fontsize=12)
+    ax.set_ylabel('Channel #', fontsize=12)
+    ax.set_yticks(np.linspace(0, n_channels, 5))
+    ax.set_yticklabels([f'{int(y)}' for y in np.linspace(0, n_channels - 1, 5)])
+
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close(fig)
     print(f"Saved heatmap: {output_path}")
 
@@ -358,5 +370,5 @@ if __name__ == "__main__":
     if args.save_heatmap:
         heatmap_dir = Path(__file__).parent / "public" / "amplitude_heatmaps"
         heatmap_path = heatmap_dir / f"{args.session_id}_{args.probe_id}_processed.png"
-        plot_processed_heatmap(processed, heatmap_path)
+        plot_processed_heatmap(processed, heatmap_path, fs=1250)
         print(f"\nHeatmap saved to: {heatmap_path}")
